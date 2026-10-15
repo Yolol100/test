@@ -1,131 +1,57 @@
-# ACF Page Text Manager — Documentation sample
-
-> Copied from the [original project README](https://github.com/Yolol100/ACF-Text-Manager/blob/main/README.md) for portfolio review. Relative links are adjusted to point to the original repository.
-
 # ACF Page Text Manager
 
-> **Portfolio project · WordPress/PHP · ACF · Yoast/Rank Math · CSV/XLSX · guarded content workflows**
+ACF Page Text Manager puts supported WordPress text fields in one admin screen. It covers page and post content, ACF fields, supported SEO metadata and image text. Editors can make individual changes or use CSV and Excel files for larger updates.
 
-ACF Page Text Manager is a WordPress admin plugin for reviewing and editing structured page/post content, supported ACF values, Yoast SEO and Rank Math metadata, image text and core post fields from one controlled interface.
+This guide has been rewritten for the review sample. It is based on the [original project documentation](https://github.com/Yolol100/ACF-Text-Manager/blob/3784555c4eccdc31afeb8cff0b6e38cd871effbb/README.md). The [PHP sample](../samples/class-import-processor.php) comes from that project, with English comments added. Its executable code and existing Dutch user messages are unchanged.
 
-It also provides validated CSV/XLSX import and export workflows for bulk content work.
+## Why this plugin exists
 
-**Developer profile:** [Andrew Baeten](https://github.com/Yolol100) · [Portfolio cases](https://andrewbaeten.nl/category/cases)
+Related text can be spread across several WordPress screens. That makes a larger content update awkward to review. The plugin brings supported fields together and gives editors a way to move content into a spreadsheet and back.
 
-## What problem it solves
+It is a content editing tool, not a complete website migration tool. It does not support every field from every plugin.
 
-Structured WordPress content is often spread across the editor, ACF, SEO plugins and media fields. ACF Page Text Manager brings those supported text fields into one reviewable admin workflow and keeps bulk writes behind validation and explicit confirmation.
+## Getting started
 
-## Portfolio snapshot
+Use the full plugin from the [original repository](https://github.com/Yolol100/ACF-Text-Manager), not this sample repository. Check the original release documentation for its WordPress, PHP and ACF requirements.
 
-| Area | What it demonstrates |
-| --- | --- |
-| WordPress | Admin tooling for pages and posts |
-| Structured content | Dynamic ACF field discovery and editing |
-| SEO workflows | Supported Yoast SEO and Rank Math metadata |
-| Bulk operations | Validated CSV/XLSX export and import |
-| Media | Alt text, captions, descriptions and guarded filename workflows |
-| Safety | Capability checks, validation, temporary state and explicit media-rename opt-in |
+1. Make a backup and try the plugin on a staging copy first.
+2. Install and activate the full plugin. Activate ACF for the ACF import and export workflow.
+3. Open the plugin's text management screen in WordPress. The original menu label is `Tekstbeheer`.
+4. Select a page or post and review the supported fields.
+5. For a bulk update, export a small selection, edit the values and import the file again. Read any warnings and check the saved content before using a larger file.
 
-## Workflow at a glance
+Keep physical media filename changes off unless they are needed and have been tested. Changing a filename can affect image links. The full plugin has an extra opt-in control for this, and the import processor also checks for confirmation.
 
-```mermaid
-flowchart LR
-    A[Pages, posts, ACF, SEO and media] --> B[Controlled admin review]
-    B --> C[Inline edits]
-    B --> D[CSV/XLSX export]
-    D --> E[Review outside WordPress]
-    E --> F[Validated import]
-    C --> G[Confirmed WordPress writes]
-    F --> G
-```
+## Reading the code sample
 
-## Main capabilities
+Start with `Import_Processor::process()`. The method takes a token and loads a prepared plan. The file upload, column mapping and plan building happen elsewhere in the full plugin.
 
-- Browse and edit supported text-oriented fields for pages and posts.
-- Discover supported ACF fields dynamically.
-- Edit Yoast SEO and Rank Math metadata where those plugins are available.
-- Manage supported image alt text, captions, descriptions and guarded filename workflows.
-- Export one or more content items to CSV or XLSX.
-- Validate and prepare CSV/XLSX/ZIP imports before applying writes.
-- Process confirmed imports with progress feedback and bounded temporary state.
-- Keep physical media filename changes behind explicit opt-in safety controls.
+The processor checks that the plan exists, belongs to the current user and has not been explicitly blocked during preparation. It selects the next batch, checks permission for each item and applies the appropriate value rules before saving. ACF fields and special fields use separate update paths.
 
-The plugin is intentionally focused on structured content editing rather than acting as a general-purpose migration suite.
+The plan keeps the cursor, update count and error messages between requests. On completion, the processor clears the content cache, deletes the temporary plan and returns a summary.
 
-## Requirements
+## Why it is built this way
 
-- WordPress 6.5 or newer.
-- PHP 8.0 or newer.
-- Advanced Custom Fields 6.7.2 or newer (Free or Pro) for ACF-field workflows.
+**Separate preparation from writing.** Reading a spreadsheet and deciding which fields it refers to are different jobs from saving content. Keeping them apart makes each part easier to follow.
 
-Current plugin version: `2.5.25`.
+**Work in batches.** A request handles a limited number of updates rather than the whole import. This reduces work per request, but does not guarantee that a request cannot time out.
 
-The plugin header is tested through WordPress 7.1. See `readme.txt` for the complete release history and current distribution metadata.
+**Check access at the point of use.** Owning a plan does not automatically mean someone can edit every item in it. The processor checks each item. The full plugin's AJAX handler also checks its own permission and nonce before calling the controller.
 
-## Verification
+**Do not treat every false return as a failed write.** ACF can return false when the saved value already matches the requested value. The processor reads the value back and compares it before reporting that case as an error. See the [ACF update_field reference](https://www.advancedcustomfields.com/resources/update_field/).
 
-The repository includes a GitHub Actions WordPress compatibility workflow that:
+## Limits worth knowing
 
-- runs PHP syntax checks;
-- creates clean WordPress 6.5/PHP 8.0 and WordPress 7.1/PHP 8.3 runtimes;
-- installs and activates ACF;
-- activates ACF Page Text Manager in a real WordPress admin context;
-- verifies that the admin module registers correctly;
-- fails when the runtime debug log contains PHP fatal errors, parse errors, warnings, deprecations or notices.
+A completed import is not the same as an entirely successful import. Reported row failures are recorded and processing continues. Those rows are not automatically retried by this class. The progress percentage counts attempted updates, not successful writes, and the final response shows at most 20 warnings.
 
-This is runtime/bootstrap evidence rather than a full unit-test suite. Higher-risk media filename changes remain staging-first.
+This is not an all-or-nothing transaction. Earlier writes remain when a later row fails. The sample does not lock concurrent requests or compare every current value with the value saved during preparation. It is not a promise of conflict-free editing or automatic recovery from every interruption.
 
-See [WordPress compatibility](https://github.com/Yolol100/ACF-Text-Manager/blob/main/.github/workflows/wordpress-compatibility.yml) for the executable contract.
+## Checks before using it
 
-## Installation
+On staging, check a normal update, an expired token, a plan owned by another user, an item the user cannot edit, and a media filename change without confirmation. Also try an unchanged ACF value and an import large enough to need several batches. Read the saved values and warnings, not just the progress bar.
 
-1. Upload the plugin folder or ZIP through **Plugins → Add New → Upload Plugin**.
-2. Activate **ACF Page Text Manager**.
-3. Make sure Advanced Custom Fields 6.7.2 or newer is installed and active for ACF workflows.
-4. Open **Tekstbeheer** in the WordPress admin sidebar.
+These are suggested checks, not a report that they have all been run for this review copy. The original project's [compatibility workflow](https://github.com/Yolol100/ACF-Text-Manager/blob/3784555c4eccdc31afeb8cff0b6e38cd871effbb/.github/workflows/wordpress-compatibility.yml) checks syntax and WordPress loading. It is not a full import test suite.
 
-## Usage
+## More detail
 
-The admin workflow is organized around three primary areas:
-
-- **Veldinhoud** — select a page or post and edit supported fields.
-- **Export** — export selected items to CSV or XLSX.
-- **Import** — upload and validate CSV/XLSX/ZIP input before processing it.
-
-Inline content edits and bulk imports remain separate operations. Media filename changes require an explicit safe path and should be tested on staging before being enabled for production content.
-
-## Media rename safety
-
-Physical filename changes are disabled by default through `wa_acf_ptm_allow_media_file_rename`. Enable them only after project-specific staging validation.
-
-```php
-add_filter( 'wa_acf_ptm_allow_media_file_rename', '__return_true' );
-```
-
-WP-CLI imports additionally require `--confirm-media-rename` before physical filename changes are allowed.
-
-## Privacy and data handling
-
-The plugin stores its own settings in WordPress options and uses temporary state for in-progress imports. Uploaded import files are processed through the WordPress temporary upload path and cleaned up by the plugin workflow.
-
-The plugin does not need to send content to an external service for its core editing/import/export functionality.
-
-## Repository structure
-
-- `acf-page-text-manager.php` — plugin bootstrap and metadata.
-- `includes/` — application, import/export, field and integration logic.
-- `assets/` — admin assets.
-- `languages/` — translations.
-- `uninstall.php` — plugin-owned cleanup.
-- `readme.txt` — WordPress distribution metadata and full changelog.
-
-## About the developer
-
-I am **Andrew Baeten**, a WordPress Developer with 10+ years of experience across **90+ WordPress projects** and ongoing responsibility for **120+ websites and webshops**. My work combines WordPress, WooCommerce, Elementor, ACF, UX, performance, technical SEO and quality-focused delivery.
-
-[Portfolio cases](https://andrewbaeten.nl/category/cases) · [LinkedIn](https://www.linkedin.com/in/andrew-baeten-305a1478/) · [Email](mailto:info@andrewbaeten.nl)
-
-## License
-
-GPL-2.0-or-later. See `LICENSE` and the plugin metadata.
+The [original WordPress documentation](readme.txt) and [release history](CHANGELOG.md) are preserved as source examples. Their version entries describe the original project, not new releases of this sample. The original project's [license](https://github.com/Yolol100/ACF-Text-Manager/blob/3784555c4eccdc31afeb8cff0b6e38cd871effbb/LICENSE) also applies to the copied plugin code.
