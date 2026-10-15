@@ -1,21 +1,23 @@
-# Code and documentation samples
+# WordPress code and documentation samples
 
-This repository contains selected samples from my original WordPress plugin, **ACF Page Text Manager**. It is intended for reviewing my code and documentation, not for installation as a complete plugin.
+I'm Andrew Baeten. This repository contains a small part of my ACF Page Text Manager project and its documentation, collected here for review.
 
-## Question 1 — Code sample
+## Code sample
 
-[PHP import processor (215 lines)](samples/class-import-processor.php)
+[Read the import processor](samples/class-import-processor.php) - 236 lines, including comments and blank lines.
 
-This class processes previously prepared imports. It checks that the import plan belongs to the current user, verifies edit permissions, handles updates in batches, records errors and reports progress. It relies on other classes in the original plugin.
+The class applies prepared content updates in batches. It checks who owns the import, checks access to each item, saves values and reports progress and errors. The comments explain decisions that are not obvious from the method names alone.
 
-Original file: https://github.com/Yolol100/ACF-Text-Manager/blob/main/includes/Admin/Services/class-import-processor.php
+This is an annotated copy of the [original 215-line file](https://github.com/Yolol100/ACF-Text-Manager/blob/3784555c4eccdc31afeb8cff0b6e38cd871effbb/includes/Admin/Services/class-import-processor.php). Only English comments were added. The executable PHP and existing Dutch user messages are unchanged.
 
-## Question 2 — Documentation examples
+## Documentation
 
-- [Project README and usage guide](docs/PROJECT-README.md) — problem, functionality, setup, use, safety and verification
-- [WordPress plugin documentation](docs/readme.txt) — detailed WordPress-facing instructions and release information
-- [Changelog](docs/CHANGELOG.md) — maintenance and changes across versions
+Start with the [project guide](docs/PROJECT-README.md). It explains the problem, setup, import flow, code choices and limitations. This guide was rewritten for the review copy.
 
-The full, working project can be found at https://github.com/Yolol100/ACF-Text-Manager.
+The [WordPress documentation](docs/readme.txt) and [changelog](docs/CHANGELOG.md) are preserved copies from the original project. Their release history belongs to that project, not this sample repository.
 
-**Source:** Original code and documentation by Andrew Baeten; copied here as portfolio samples. The documentation links back to the source where necessary.
+## What was checked
+
+Both versions of the sample pass PHP 8.4 syntax checking. Their 1,281 executable tokens match after comments and whitespace are excluded. That confirms this annotation did not change the executable code. It does not prove that every import scenario works in WordPress; a full runtime test was not performed for this copy.
+
+This repository is not an installable plugin. The sample needs WordPress, ACF and other classes from the [full project](https://github.com/Yolol100/ACF-Text-Manager). The original project's [license](https://github.com/Yolol100/ACF-Text-Manager/blob/3784555c4eccdc31afeb8cff0b6e38cd871effbb/LICENSE) applies to the copied plugin code.
