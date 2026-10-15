@@ -9,6 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/**
+ * Applies one batch from a stored import plan.
+ * Upload handling and field mapping belong to other classes.
+ */
 final class Import_Processor {
 	private Import_Plan_Store $plan_store;
 	private Page_Repository $repository;
@@ -24,7 +28,12 @@ final class Import_Processor {
 		$this->target_permissions = $target_permissions ?? new Target_Permission_Service();
 	}
 
+	/**
+	 * The AJAX caller checks permissions and its nonce before reaching this method.
+	 * This method returns progress, or an error when the plan cannot be used.
+	 */
 	public function process( string $token ): array {
+		// Read values from the saved plan, not from a new browser payload.
 		$plan = $this->plan_store->get( $token );
 		if ( ! is_array( $plan ) ) {
 			return array(
@@ -33,6 +42,7 @@ final class Import_Processor {
 			);
 		}
 
+		// Knowing the token is not enough: the plan must belong to this user.
 		if ( empty( $plan['user_id'] ) || get_current_user_id() !== (int) $plan['user_id'] ) {
 			return array(
 				'error'  => __( 'Dit importplan hoort niet bij de huidige gebruiker of is ongeldig.', 'acf-page-text-manager' ),
@@ -40,6 +50,7 @@ final class Import_Processor {
 			);
 		}
 
+		// Keep any explicit block set during import preparation in place.
 		if ( array_key_exists( 'import_allowed', $plan ) && empty( $plan['import_allowed'] ) ) {
 			return array(
 				'error'  => __( 'Deze import is niet toegestaan door de importvalidatie. Start de import opnieuw en controleer de meldingen.', 'acf-page-text-manager' ),
@@ -64,6 +75,7 @@ final class Import_Processor {
 				}
 			)
 		);
+		// A filename change can affect image links, so it needs separate confirmation.
 		if ( $this->plan_contains_media_filename_update( $operations ) && empty( $plan['import_options']['confirm_media_rename'] ) ) {
 			return array(
 				'error'  => __( 'Deze import bevat media-bestandsnaamwijzigingen en vereist expliciete bevestiging in het importformulier.', 'acf-page-text-manager' ),
@@ -71,6 +83,7 @@ final class Import_Processor {
 			);
 		}
 
+		// Limit work per request. The saved cursor tells the next request where to start.
 		$batch_size        = max( 1, (int) Settings::get()['import_batch_size'] );
 		$cursor            = isset( $plan['cursor'] ) ? absint( $plan['cursor'] ) : 0;
 		$batch             = array_slice( $updatable_indexes, $cursor, $batch_size );
@@ -79,6 +92,7 @@ final class Import_Processor {
 
 		foreach ( $batch as $operation_index ) {
 			$operation = isset( $operations[ $operation_index ] ) && is_array( $operations[ $operation_index ] ) ? $operations[ $operation_index ] : array();
+			// Access can differ per item, even when all rows came from the same upload.
 			if ( ! $this->target_permissions->current_user_can_edit( $operation ) ) {
 				$error_messages[] = sprintf(
 					/* translators: %d: import row number. */
@@ -95,10 +109,12 @@ final class Import_Processor {
 				$operation_value = is_string( $encoded_value ) ? $encoded_value : '';
 			}
 
+			// Apply the field type's value rules again just before saving.
 			$new_value     = $this->values->sanitize_by_type( (string) $operation_value, $field_type );
 			$updated       = false;
 			$current_after = '';
 
+			// Post, SEO and media fields use a different writer from ACF fields.
 			if ( ! empty( $operation['is_special'] ) ) {
 				$updated = $this->special_fields->update_special_field_value( $operation, $new_value );
 				$current_after = $this->values->stringify_value( $this->special_fields->get_special_field_value( $operation ) );
@@ -126,6 +142,7 @@ final class Import_Processor {
 					continue;
 				}
 
+				// Prefer the key so ACF can link a new value to its field settings.
 				$updated = '' !== $field_key ? update_field( $field_key, $new_value, $acf_post_id ) : false;
 				if ( false === $updated && '' !== $field_name ) {
 					$updated = update_field( $field_name, $new_value, $acf_post_id );
@@ -133,6 +150,7 @@ final class Import_Processor {
 				$current_after = $this->values->get_current_field_value( $field_name, $acf_post_id, $field_key );
 			}
 
+			// ACF can return false for an unchanged value. Readback avoids a false error.
 			if ( false === $updated && $this->values->values_match_for_conflict_check( $current_after, $new_value, $field_type ) ) {
 				$updated = true;
 			}
@@ -150,6 +168,7 @@ final class Import_Processor {
 			$updated_count++;
 		}
 
+		// Failed rows count as attempted. Their errors are reported, not retried here.
 		$cursor                  += count( $batch );
 		$plan['cursor']           = $cursor;
 		$plan['updated_count']    = $updated_count;
@@ -157,6 +176,7 @@ final class Import_Processor {
 		$total_updates            = count( $updatable_indexes );
 		$done                     = $cursor >= $total_updates;
 
+		// Finished means every planned row was attempted, not that every write succeeded.
 		if ( $done ) {
 			$this->repository->clear_cache();
 			$this->plan_store->delete( $token );
@@ -174,6 +194,7 @@ final class Import_Processor {
 			);
 		}
 
+		// Persist progress between requests instead of holding a long request open.
 		$this->plan_store->save( $token, $plan );
 		$percent = 0 === $total_updates ? 100 : (int) floor( ( $cursor / $total_updates ) * 100 );
 
