@@ -1,0 +1,63 @@
+name: Temporary public-source snapshot for repository quality review
+on:
+  pull_request:
+    paths:
+      - .github/workflows/public-source-review.yml
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'Yolol100/test'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Source-only read-only repository snapshots
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+          GIT_LFS_SKIP_SMUDGE: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, tarfile, time
+          names = ["ACF-Text-Manager","translatewordpress","shutterstock-seo-","Content-Sync-Manager","soocool-for-woocommerce","acf-image-auto-filler","MDTPullMarker","KeystoneLens","RaidLeadAssist","Leadscanner","programmeren","elementorjson","seochecker","Designchecker","Checklist","transcriberen","wordpressconnector","Orchestrator","vacature-engine","Elementorconnector","Yolol100",".github","myhost-mailbox","browser-search","test","theme"]
+          base=pathlib.Path('/tmp/webactueel-readonly-source')
+          (base/'repos').mkdir(parents=True,exist_ok=True)
+          out=pathlib.Path('source-review')
+          out.mkdir(exist_ok=True)
+          manifest={'generated_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'purpose':'temporary read-only public-source quality audit','repositories':[]}
+          for name in names:
+            folder=base/'repos'/name
+            record={'name':name,'status':'not_run'}
+            try:
+              env=dict(os.environ,GIT_LFS_SKIP_SMUDGE='1',GIT_TERMINAL_PROMPT='0')
+              subprocess.run(['git','-c','core.hooksPath=/dev/null','clone','--quiet','--depth','1','--filter=blob:none','--no-tags','https://github.com/Yolol100/'+name+'.git',str(folder)],check=True,timeout=90,env=env,capture_output=True)
+              head=subprocess.check_output(['git','-C',str(folder),'rev-parse','HEAD'],text=True).strip()
+              output=out/(name.replace('/','_')+'.tar.gz')
+              seen=0;count=0;missing=[]
+              with tarfile.open(output,'w:gz') as tf:
+                for source in sorted(folder.rglob('*')):
+                  rel=source.relative_to(folder)
+                  if '.git' in rel.parts or not source.is_file() or source.is_symlink():continue
+                  if source.suffix in ('.pem','.p12','.pfx','.key') or source.name=='.env':
+                    missing.append(str(rel));continue
+                  size=source.stat().st_size
+                  if size>25000000 or seen+size>150000000:
+                    missing.append(str(rel));continue
+                  tf.add(source,arcname=name+'/'+str(rel),recursive=False)
+                  seen+=size;count+=1
+              record.update(status='archived',head_sha=head,files=count,raw_bytes=seen,archive_bytes=output.stat().st_size,archive_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),skipped=missing)
+            except Exception as exc:
+              record.update(status='error',error_type=type(exc).__name__)
+            manifest['repositories'].append(record)
+            print(name,record['status'],'files',record.get('files',0),'archive_bytes',record.get('archive_bytes',0),flush=True)
+          (out/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf8')
+          if not any(x['status']=='archived' for x in manifest['repositories']):raise SystemExit('No sources archived')
+          PY
+      - name: Upload source-only snapshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: public-source-quality-review
+          path: source-review
+          if-no-files-found: error
+          retention-days: 1
