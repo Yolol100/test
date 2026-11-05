@@ -33,7 +33,7 @@ jobs:
               env=dict(os.environ,GIT_LFS_SKIP_SMUDGE='1',GIT_TERMINAL_PROMPT='0')
               subprocess.run(['git','-c','core.hooksPath=/dev/null','clone','--quiet','--depth','1','--filter=blob:none','--no-tags','https://github.com/Yolol100/'+name+'.git',str(folder)],check=True,timeout=90,env=env,capture_output=True)
               head=subprocess.check_output(['git','-C',str(folder),'rev-parse','HEAD'],text=True).strip()
-              output=out/(name.replace('/','_')+'.tar.gz')
+              output=out/(('_dotgithub' if name=='.github' else name.replace('/','_'))+'.tar.gz')
               seen=0;count=0;missing=[]
               with tarfile.open(output,'w:gz') as tf:
                 for source in sorted(folder.rglob('*')):
